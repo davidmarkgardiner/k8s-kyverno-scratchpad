@@ -1,0 +1,33 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: dynamic-resource-limits
+spec:
+  rules:
+  - name: set-resource-limits-based-on-prometheus
+    match:
+      resources:
+        kinds:
+        - Pod
+    context:
+    - name: promMetrics
+      apiCall:
+        urlPath: "/api/v1/query"
+        service:
+          name: prometheus-server
+          namespace: monitoring
+          port: 9090
+        jmesPath: "data.result[0].value[1]"
+        method: GET
+    mutate:
+      patchStrategicMerge:
+        spec:
+          containers:
+          - name: "*"
+            resources:
+              limits:
+                cpu: "{{ multiply (add promMetrics.value 1) '1000m' }}"
+                memory: "{{ multiply promMetrics.value '128Mi' }}"
+              requests:
+                cpu: "{{ multiply promMetrics.value '500m' }}"
+                memory: "{{ multiply promMetrics.value '64Mi' }}"
